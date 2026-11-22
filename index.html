@@ -1,0 +1,524 @@
+<!doctype html>
+<html lang="ja">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="description" content="当日に名前を入力し、プレゼント箱をシャッフルして交換先を一斉に決めます。奇数人にも対応しています。">
+  <meta http-equiv="Content-Security-Policy" content="default-src 'none'; script-src 'unsafe-inline'; style-src 'unsafe-inline'; img-src 'self' data:; connect-src 'none'; base-uri 'none'; form-action 'none'">
+  <meta name="theme-color" content="#153f35">
+  <title>プレゼント交換 | Gift shuffle</title>
+  <style>
+    :root {
+      color-scheme: light;
+      --paper: #f7f5ee;
+      --white: #fffefa;
+      --ink: #203e35;
+      --muted: #62736b;
+      --pine: #174c3d;
+      --pine-hover: #103a2e;
+      --line: #dcded2;
+      --red: #a94448;
+      --gold: #a27d32;
+      font-family: -apple-system, BlinkMacSystemFont, "Hiragino Kaku Gothic ProN", "Yu Gothic", Meiryo, sans-serif;
+      font-synthesis: none;
+      -webkit-text-size-adjust: 100%;
+    }
+    * { box-sizing: border-box; }
+    body { margin: 0; color: var(--ink); background: var(--paper); font-size: 15px; line-height: 1.7; }
+    button, textarea { font: inherit; }
+    button { cursor: pointer; touch-action: manipulation; }
+    button:disabled { cursor: default; opacity: .6; }
+    button:focus-visible, textarea:focus-visible { outline: 3px solid var(--gold); outline-offset: 4px; }
+    button, textarea { -webkit-tap-highlight-color: transparent; }
+    [hidden] { display: none !important; }
+    .page { width: min(1160px, calc(100% - 48px)); margin-inline: auto; }
+    .topbar { display: flex; justify-content: space-between; align-items: center; gap: 16px; padding-block: 26px; border-bottom: 1px solid var(--line); }
+    .brand { display: inline-flex; align-items: center; gap: 10px; font-size: 13px; font-weight: 700; letter-spacing: .12em; }
+    .brand-mark { font-size: 23px; line-height: 1; }
+    .season { color: var(--muted); font-size: 12px; letter-spacing: .12em; text-align: right; }
+    .intro { padding-block: 44px 30px; }
+    .eyebrow { margin: 0 0 7px; color: var(--gold); font-size: 12px; font-weight: 700; letter-spacing: .18em; }
+    h1 { margin: 0; font-size: clamp(30px, 5vw, 44px); font-weight: 700; line-height: 1.4; letter-spacing: .03em; }
+    .intro p:last-child { margin: 12px 0 0; color: var(--muted); }
+    .layout { display: grid; grid-template-columns: 320px minmax(0, 1fr); gap: 24px; align-items: start; }
+    .input-panel { padding: 24px; background: var(--white); border: 1px solid var(--line); border-radius: 18px; }
+    .panel-heading, .stage-heading, .result-toolbar { display: flex; align-items: center; justify-content: space-between; gap: 12px; }
+    .panel-heading { margin-bottom: 7px; }
+    .input-label { font-weight: 700; font-size: 16px; }
+    .count { padding: 2px 10px; border-radius: 20px; background: #edf0e8; color: var(--pine); font-size: 12px; font-variant-numeric: tabular-nums; white-space: nowrap; }
+    .help { margin: 0 0 14px; color: var(--muted); font-size: 13px; }
+    textarea { display: block; width: 100%; min-height: 232px; padding: 14px; resize: vertical; border: 1px solid #cfd5c9; border-radius: 10px; color: var(--ink); background: var(--white); line-height: 1.9; font-size: 16px; }
+    textarea::placeholder { color: #737e76; }
+    textarea:disabled { background: #f4f4ed; opacity: 1; color: var(--muted); }
+    textarea[aria-invalid="true"] { border-color: var(--red); }
+    .sample { padding: 9px 0; min-height: 44px; margin: 2px 0 8px; border: 0; background: transparent; color: var(--pine); text-decoration: underline; text-underline-offset: 4px; font-size: 12px; }
+    .rules { margin: 0 0 20px; padding: 14px 0; border-block: 1px solid var(--line); font-size: 13px; }
+    .rules div + div { margin-top: 6px; }
+    .rule-label { display: inline-block; min-width: 4.6em; color: var(--muted); }
+    .primary { display: inline-flex; justify-content: center; align-items: center; gap: 9px; width: 100%; min-height: 52px; padding: 12px 14px; border: 0; border-radius: 10px; color: white; background: var(--pine); font-weight: 700; }
+    .primary:hover:not(:disabled) { background: var(--pine-hover); }
+    .secondary { min-height: 44px; padding: 8px 13px; color: var(--pine); border: 1px solid #cdd4c8; border-radius: 8px; background: var(--white); font-size: 13px; }
+    .secondary:hover:not(:disabled) { background: #edf0e8; }
+    .edit-button { width: 100%; margin-top: 10px; }
+    .error { margin: 12px 0 0; color: #a12e35; font-size: 13px; white-space: pre-line; }
+    .storage-note { margin: 16px 0 0; color: var(--muted); font-size: 12px; }
+    .storage-note span { display: block; }
+    .stage { min-width: 0; overflow: hidden; border: 1px solid var(--line); border-radius: 18px; background: var(--white); }
+    .stage-heading { padding: 19px 24px; border-bottom: 1px solid var(--line); }
+    h2 { margin: 0; font-size: 15px; }
+    .stage-state { color: var(--muted); font-size: 12px; }
+    .stage-body { position: relative; min-height: 450px; padding: 28px 24px; overflow: clip; background-image: radial-gradient(#d8ded2 0.7px, transparent 0.7px); background-size: 20px 20px; }
+    .empty { min-height: 390px; display: grid; align-content: center; justify-items: center; text-align: center; gap: 24px; }
+    .empty-gifts { display: flex; gap: 22px; align-items: end; padding-top: 20px; }
+    .empty-gifts .gift-art:first-child { transform: rotate(-12deg) scale(.86); }
+    .empty-gifts .gift-art:last-child { transform: rotate(12deg) scale(.86); }
+    .empty-title { margin: 0; font-weight: 700; }
+    .empty-note { margin: 4px 0 0; color: var(--muted); font-size: 13px; }
+    .preview-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(95px, 1fr)); gap: 27px 12px; align-items: start; }
+    .gift-card { min-width: 0; text-align: center; }
+    .gift-art { --box-color: #b75356; --lid-color: #c26264; --ribbon: #f3dfaf; position: relative; width: 68px; height: 72px; margin: 7px auto 12px; }
+    .gift-box { position: absolute; width: 60px; height: 43px; bottom: 0; left: 4px; border-radius: 2px 2px 5px 5px; background: var(--box-color); box-shadow: inset -8px 0 0 #0000000b, 0 7px 10px #153f3510; }
+    .gift-box::before { content: ""; position: absolute; top: 0; bottom: 0; left: 24px; width: 12px; background: var(--ribbon); }
+    .gift-lid { position: absolute; width: 68px; height: 14px; top: 19px; left: 0; border-radius: 3px; background: var(--lid-color); box-shadow: 0 2px 0 #00000012; }
+    .gift-lid::before { content: ""; position: absolute; left: 28px; top: 0; bottom: 0; width: 12px; background: var(--ribbon); }
+    .gift-bow::before, .gift-bow::after { content: ""; position: absolute; top: 3px; width: 24px; height: 18px; border: 6px solid var(--ribbon); }
+    .gift-bow::before { left: 10px; transform: rotate(14deg); border-radius: 15px 15px 0 15px; }
+    .gift-bow::after { right: 10px; transform: rotate(-14deg); border-radius: 15px 15px 15px 0; }
+    .gift-name { display: block; overflow-wrap: anywhere; font-weight: 700; font-size: 14px; }
+    .recipient { margin-top: 8px; color: var(--muted); font-size: 12px; overflow-wrap: anywhere; }
+    .recipient-name { color: var(--pine); font-weight: 700; }
+    .groups { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 16px; }
+    .exchange-group { min-width: 0; padding: 15px 12px 18px; border: 1px solid #d8e1d4; border-radius: 12px; background: #f6f8f1; }
+    .exchange-group.triple { grid-column: 1 / -1; background: #fcf7eb; border-color: #e7dcc2; }
+    .group-title { display: flex; flex-wrap: wrap; justify-content: space-between; gap: 4px 8px; margin: 0 0 14px; }
+    .group-title h3 { margin: 0; font-size: 12px; color: var(--muted); font-weight: 400; }
+    .group-kind { color: var(--pine); font-size: 11px; }
+    .group-members { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 10px; }
+    .triple .group-members { grid-template-columns: repeat(3, minmax(0, 1fr)); }
+    .is-shuffling .group-title, .is-shuffling .recipient { visibility: hidden; }
+    .is-shuffling .exchange-group { border-color: transparent; background: transparent; }
+    .is-shuffling .gift-card { will-change: transform; }
+    .result-toolbar { flex-wrap: wrap; margin-bottom: 18px; }
+    .result-note { margin: 0; color: var(--muted); font-size: 12px; }
+    .live-status { min-height: 28px; margin: 14px 0 0; color: var(--pine); font-size: 13px; }
+    .footer { padding-block: 30px; color: var(--muted); text-align: center; font-size: 12px; }
+    @media (max-width: 900px) {
+      .layout { grid-template-columns: 280px minmax(0, 1fr); gap: 18px; }
+      .input-panel { padding: 20px; }
+      .stage-body { padding-inline: 18px; }
+      .groups { grid-template-columns: minmax(0, 1fr); }
+    }
+    @media (max-width: 680px) {
+      .page { width: calc(100% - 32px); }
+      .topbar { padding-block: 18px; }
+      .brand { font-size: 11px; letter-spacing: .08em; }
+      .season { font-size: 11px; letter-spacing: 0; }
+      .intro { padding-block: 28px 23px; }
+      .layout { grid-template-columns: minmax(0, 1fr); }
+      .input-panel { padding: 20px; }
+      textarea { min-height: 170px; }
+      .stage-heading { padding: 16px 18px; }
+      .stage-body { min-height: 330px; padding: 22px 16px; }
+      .empty { min-height: 280px; }
+      .groups { grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 12px; }
+      .exchange-group { grid-column: 1 / -1; padding-inline: 12px; }
+      .preview-grid { grid-template-columns: repeat(3, minmax(0, 1fr)); }
+      .gift-name { font-size: 13px; }
+      .recipient { font-size: 12px; }
+      .empty-gifts { gap: 10px; }
+      .result-toolbar { align-items: flex-start; }
+    }
+    @media (prefers-reduced-motion: reduce) {
+      *, *::before, *::after { scroll-behavior: auto !important; }
+    }
+    @media print {
+      body { background: white; }
+      .topbar, .intro, .input-panel, .footer, .live-status, #copy-result { display: none; }
+      .page { width: 100%; }
+      .layout { display: block; }
+      .stage { border: none; }
+      .stage-body { background: none; }
+      .groups { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+      .exchange-group { break-inside: avoid; }
+    }
+  </style>
+</head>
+<body>
+  <div class="page">
+    <header class="topbar">
+      <div class="brand"><span class="brand-mark" aria-hidden="true">🎁</span> GIFT SHUFFLE</div>
+      <span class="season">CHRISTMAS GIFT EXCHANGE</span>
+    </header>
+    <main>
+      <div class="intro">
+        <p class="eyebrow">LET’S SHARE A LITTLE JOY</p>
+        <h1>プレゼント交換</h1>
+        <p>名前を入力し、箱をシャッフルして交換先を決めます。</p>
+      </div>
+      <div class="layout">
+        <section class="input-panel" aria-label="参加者の入力">
+          <div class="panel-heading">
+            <label class="input-label" for="participants">参加者の名前</label>
+            <span class="count" id="participant-count">0人</span>
+          </div>
+          <p class="help" id="input-help">1行に1人ずつ入力してください。</p>
+          <textarea id="participants" rows="7" maxlength="4000" placeholder="あおい&#10;はると&#10;さくら&#10;りく" spellcheck="false" aria-describedby="input-help input-error"></textarea>
+          <button class="sample" type="button" id="sample-names">お試しの名前を入力</button>
+          <div class="rules" aria-label="交換のルール">
+            <div><span class="rule-label">偶数人</span>2人ずつで交換</div>
+            <div><span class="rule-label">奇数人</span>1組だけ3人で順送り</div>
+          </div>
+          <button class="primary" type="button" id="shuffle"><span aria-hidden="true">✦</span><span id="shuffle-label">プレゼントをシャッフル</span></button>
+          <button class="secondary edit-button" type="button" id="edit-names" hidden>名前を編集</button>
+          <p class="error" id="input-error" role="alert" hidden></p>
+          <p class="storage-note"><span>名前と結果は、このタブに保存します。</span><span>外部には送信しません。</span></p>
+        </section>
+        <div>
+          <section class="stage" id="stage" aria-labelledby="stage-title" aria-busy="false">
+            <div class="stage-heading">
+              <h2 id="stage-title">プレゼントの準備</h2>
+              <span class="stage-state" id="stage-state">名前を入力してスタート</span>
+            </div>
+            <div class="stage-body" id="stage-body">
+              <div class="result-toolbar" id="result-toolbar" hidden>
+                <p class="result-note">矢印は、プレゼントを渡す方向です。</p>
+                <button class="secondary" id="copy-result" type="button">結果をコピー</button>
+              </div>
+              <div id="gifts"></div>
+            </div>
+          </section>
+          <p class="live-status" id="status" role="status" aria-live="polite" aria-atomic="true"></p>
+        </div>
+      </div>
+    </main>
+    <footer class="footer">みんなに、ひとつずつのプレゼント。</footer>
+  </div>
+  <script>
+  'use strict';
+  (() => {
+    const $ = id => document.getElementById(id);
+    const input = $('participants');
+    const shuffleButton = $('shuffle');
+    const sampleButton = $('sample-names');
+    const editButton = $('edit-names');
+    const gifts = $('gifts');
+    const stage = $('stage');
+    const error = $('input-error');
+    const status = $('status');
+    const storageKey = 'gift-shuffle-v1';
+    const colors = [
+      ['#b75356', '#c26264', '#f3dfaf'],
+      ['#497565', '#5a8a77', '#ead5a0'],
+      ['#bc9147', '#cca256', '#faedce'],
+      ['#6e7e9b', '#8191ad', '#f5e2b9'],
+      ['#a16b82', '#b77d93', '#f7dfb4'],
+      ['#71845a', '#84976b', '#f5e2b8']
+    ];
+    let phase = 'editing';
+    let order = null;
+    let activeAnimations = [];
+    let drawVersion = 0;
+    let editTimer = null;
+
+    function parseNames(text) {
+      return text.split(/\r?\n/).map(name => name.trim()).filter(Boolean);
+    }
+    function validateNames(names) {
+      if (names.length < 2) return '名前を2人分以上、入力してください。';
+      if (names.length > 60) return '参加者は60人までです。';
+      if (names.some(name => [...name].length > 30)) return '名前は1人30文字までです。';
+      const normalized = names.map(name => name.normalize('NFKC').toLocaleLowerCase('ja-JP'));
+      if (new Set(normalized).size !== names.length) {
+        return '同じ名前があります。\n苗字などを付けて区別してください。';
+      }
+      return '';
+    }
+    function randomInt(limit) {
+      const bound = Math.floor(4294967296 / limit) * limit;
+      const value = new Uint32Array(1);
+      do { crypto.getRandomValues(value); } while (value[0] >= bound);
+      return value[0] % limit;
+    }
+    function shuffleIndices(length) {
+      const result = Array.from({ length }, (_, i) => i);
+      for (let i = length - 1; i > 0; i--) {
+        const j = randomInt(i + 1);
+        [result[i], result[j]] = [result[j], result[i]];
+      }
+      return result;
+    }
+    function makeGroups(indices) {
+      const groups = [];
+      for (let i = 0; i < indices.length;) {
+        const size = indices.length - i === 3 ? 3 : 2;
+        groups.push(indices.slice(i, i + size));
+        i += size;
+      }
+      return groups;
+    }
+    function isValidOrder(indices, length) {
+      return Array.isArray(indices) && indices.length === length
+        && new Set(indices).size === length
+        && indices.every(i => Number.isInteger(i) && i >= 0 && i < length);
+    }
+    function element(tag, className, text) {
+      const node = document.createElement(tag);
+      if (className) node.className = className;
+      if (text !== undefined) node.textContent = text;
+      return node;
+    }
+    function giftArt(index) {
+      const art = element('div', 'gift-art');
+      const palette = colors[index % colors.length];
+      ['--box-color', '--lid-color', '--ribbon'].forEach((property, i) => art.style.setProperty(property, palette[i]));
+      art.setAttribute('aria-hidden', 'true');
+      art.append(element('div', 'gift-box'), element('div', 'gift-lid'), element('div', 'gift-bow'));
+      return art;
+    }
+    function giftCard(name, index) {
+      const card = element('div', 'gift-card');
+      card.dataset.person = String(index);
+      card.append(giftArt(index), element('span', 'gift-name', name));
+      return card;
+    }
+    function updateCount() {
+      $('participant-count').textContent = parseNames(input.value).length + '人';
+    }
+    function showError(message) {
+      error.textContent = message;
+      error.hidden = !message;
+      input.setAttribute('aria-invalid', message ? 'true' : 'false');
+    }
+    function save() {
+      try {
+        sessionStorage.setItem(storageKey, JSON.stringify({ names: input.value, order }));
+      } catch (_) {
+        document.querySelector('.storage-note').replaceChildren(
+          element('span', '', 'この環境では、タブへの保存ができません。'),
+          element('span', '', '結果をコピーして保存してください。')
+        );
+      }
+    }
+    function renderPreview() {
+      gifts.replaceChildren();
+      gifts.className = '';
+      $('result-toolbar').hidden = true;
+      $('stage-title').textContent = 'プレゼントの準備';
+      const names = parseNames(input.value);
+      if (!names.length) {
+        $('stage-state').textContent = '名前を入力してスタート';
+        const empty = element('div', 'empty');
+        const art = element('div', 'empty-gifts');
+        art.setAttribute('aria-hidden', 'true');
+        [1, 0, 2].forEach(index => art.appendChild(giftArt(index)));
+        const caption = element('div');
+        caption.append(element('p', 'empty-title', 'ここにプレゼントが並びます'), element('p', 'empty-note', '当日に参加者の名前を入力してください。'));
+        empty.append(art, caption);
+        gifts.appendChild(empty);
+        return;
+      }
+      $('stage-state').textContent = names.length + '人のプレゼント';
+      gifts.className = 'preview-grid';
+      names.slice(0, 60).forEach((name, i) => gifts.appendChild(giftCard(name, i)));
+    }
+    function renderGroups(names, indices, existingCards) {
+      const cards = existingCards || names.map(giftCard);
+      gifts.replaceChildren();
+      gifts.className = 'groups';
+      makeGroups(indices).forEach((group, index) => {
+        const section = element('section', 'exchange-group' + (group.length === 3 ? ' triple' : ''));
+        const title = element('div', 'group-title');
+        const heading = element('h3', '', (index + 1) + '組目');
+        heading.id = 'group-' + index;
+        section.setAttribute('aria-labelledby', heading.id);
+        title.append(heading, element('span', 'group-kind', group.length === 3 ? '3人で順送り' : '2人で交換'));
+        const members = element('div', 'group-members');
+        group.forEach((person, i) => {
+          const card = cards[person];
+          const recipient = element('div', 'recipient');
+          const arrow = element('span', '', '→ ');
+          arrow.setAttribute('aria-hidden', 'true');
+          const accessibleLabel = element('span', '', '渡す相手：');
+          accessibleLabel.style.cssText = 'position:absolute;width:1px;height:1px;overflow:hidden;clip-path:inset(50%);white-space:nowrap';
+          recipient.append(arrow, accessibleLabel, element('span', 'recipient-name', names[group[(i + 1) % group.length]]));
+          card.appendChild(recipient);
+          members.appendChild(card);
+        });
+        section.append(title, members);
+        gifts.appendChild(section);
+      });
+    }
+    function finishDraw(names, version) {
+      if (version !== drawVersion) return;
+      activeAnimations.forEach(animation => animation.cancel());
+      activeAnimations = [];
+      phase = 'complete';
+      stage.classList.remove('is-shuffling');
+      stage.setAttribute('aria-busy', 'false');
+      $('stage-title').textContent = '交換先が決まりました';
+      $('stage-state').textContent = names.length + '人・' + makeGroups(order).length + '組';
+      $('shuffle-label').textContent = 'もう一度シャッフル';
+      $('result-toolbar').hidden = false;
+      shuffleButton.disabled = false;
+      editButton.hidden = false;
+      const triple = names.length % 2 ? '1組は3人で順送りです。' : '';
+      status.textContent = `${names.length}人全員の交換先が決まりました。${triple}`;
+      save();
+    }
+    async function draw() {
+      if (phase === 'shuffling') return;
+      const names = parseNames(input.value);
+      const problem = validateNames(names);
+      showError(problem);
+      if (problem) { input.focus(); return; }
+      if (phase === 'complete' && !window.confirm('現在の交換先を変更し、もう一度抽選しますか？')) return;
+      const nextOrder = shuffleIndices(names.length);
+      clearTimeout(editTimer);
+      renderPreview();
+      const cards = [...gifts.querySelectorAll('.gift-card')];
+      const oldRects = cards.map(card => card.getBoundingClientRect());
+      order = nextOrder;
+      const version = ++drawVersion;
+      phase = 'shuffling';
+      input.disabled = true;
+      sampleButton.disabled = true;
+      shuffleButton.disabled = true;
+      editButton.hidden = true;
+      $('result-toolbar').hidden = true;
+      $('shuffle-label').textContent = 'シャッフル中…';
+      $('stage-title').textContent = '箱をシャッフルしています';
+      $('stage-state').textContent = 'まもなく一斉に発表';
+      status.textContent = '全員の交換先を抽選しています。';
+      stage.classList.add('is-shuffling');
+      stage.setAttribute('aria-busy', 'true');
+      renderGroups(names, order, cards);
+      // Preserve a completed draw if the page is refreshed during the animation.
+      save();
+      const reduced = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+      if (reduced || typeof cards[0].animate !== 'function') {
+        finishDraw(names, version);
+        return;
+      }
+      const stageRect = $('stage-body').getBoundingClientRect();
+      const targetRects = cards.map(card => card.getBoundingClientRect());
+      const createStop = (rect, i, rotation) => {
+        const target = targetRects[i];
+        const x = rect.left - target.left;
+        const y = rect.top - target.top;
+        return { transform: `translate(${x}px, ${y}px) rotate(${rotation}deg)` };
+      };
+      const paths = [shuffleIndices(names.length), shuffleIndices(names.length)];
+      activeAnimations = cards.map((card, i) => {
+        const target = targetRects[i];
+        const middle = paths.map(path => {
+          const other = targetRects[path[i]];
+          const left = Math.max(stageRect.left + 8, Math.min(other.left, stageRect.right - target.width - 8));
+          const top = target.top + Math.max(-160, Math.min(160, other.top - target.top));
+          return { left, top };
+        });
+        return card.animate([
+          { ...createStop(oldRects[i], i, 0), offset: 0 },
+          { ...createStop(middle[0], i, (i % 2 ? 1 : -1) * 14), offset: .30 },
+          { ...createStop(middle[1], i, (i % 2 ? -1 : 1) * 12), offset: .62 },
+          { transform: 'translate(0, 0) rotate(0deg)', offset: 1 }
+        ], { duration: 2900 + (i % 4) * 100, easing: 'cubic-bezier(.45,0,.3,1)', fill: 'both' });
+      });
+      await Promise.allSettled(activeAnimations.map(animation => animation.finished));
+      finishDraw(names, version);
+    }
+    function onInput() {
+      if (phase !== 'editing') return;
+      order = null;
+      showError('');
+      status.textContent = '';
+      updateCount();
+      clearTimeout(editTimer);
+      editTimer = setTimeout(renderPreview, 100);
+      save();
+    }
+    function resultText() {
+      const names = parseNames(input.value);
+      return 'プレゼント交換の結果\n\n' + makeGroups(order).map((group, index) => {
+        const lines = group.map((person, i) => `${names[person]} → ${names[group[(i + 1) % group.length]]}`);
+        return `${index + 1}組目${group.length === 3 ? '（3人で順送り）' : ''}\n${lines.join('\n')}`;
+      }).join('\n\n');
+    }
+    async function copyResult() {
+      if (phase !== 'complete') return;
+      const text = resultText();
+      try {
+        if (navigator.clipboard && window.isSecureContext) {
+          await navigator.clipboard.writeText(text);
+        } else {
+          const copyField = element('textarea');
+          copyField.value = text;
+          copyField.style.cssText = 'position:fixed;top:0;left:0;width:1px;height:1px;opacity:0';
+          document.body.appendChild(copyField);
+          copyField.select();
+          const copied = document.execCommand('copy');
+          copyField.remove();
+          $('copy-result').focus();
+          if (!copied) throw new Error('Copy unavailable');
+        }
+        status.textContent = '結果をコピーしました。';
+      } catch (_) {
+        status.textContent = 'コピーできませんでした。\n画面の結果を選択してコピーするか、画面を撮影してください。';
+      }
+    }
+    function restore() {
+      try {
+        const state = JSON.parse(sessionStorage.getItem(storageKey) || 'null');
+        if (!state || typeof state.names !== 'string' || state.names.length > 4000) return;
+        input.value = state.names;
+        const names = parseNames(input.value);
+        if (!validateNames(names) && isValidOrder(state.order, names.length)) {
+          order = state.order.slice();
+          renderGroups(names, order);
+          input.disabled = true;
+          sampleButton.disabled = true;
+          finishDraw(names, drawVersion);
+        }
+      } catch (_) { /* A corrupt or unavailable snapshot does not prevent a new draw. */ }
+    }
+    input.addEventListener('input', onInput);
+    sampleButton.addEventListener('click', () => {
+      if (input.value.trim() && !window.confirm('入力した名前を、お試しの名前に置き換えますか？')) return;
+      input.value = 'あおい\nはると\nさくら\nりく\nひなた\nゆい';
+      onInput();
+    });
+    shuffleButton.addEventListener('click', () => {
+      draw().catch(() => {
+        activeAnimations.forEach(animation => animation.cancel());
+        if (order) finishDraw(parseNames(input.value), drawVersion);
+        else {
+          phase = 'editing';
+          input.disabled = false;
+          sampleButton.disabled = false;
+          shuffleButton.disabled = false;
+          showError('抽選を開始できませんでした。\nページを再読み込みして、もう一度お試しください。');
+        }
+      });
+    });
+    editButton.addEventListener('click', () => {
+      if (!window.confirm('現在の結果を解除し、参加者の名前を編集しますか？')) return;
+      drawVersion++;
+      phase = 'editing';
+      order = null;
+      input.disabled = false;
+      sampleButton.disabled = false;
+      editButton.hidden = true;
+      $('shuffle-label').textContent = 'プレゼントをシャッフル';
+      status.textContent = '';
+      showError('');
+      renderPreview();
+      save();
+      input.focus();
+    });
+    $('copy-result').addEventListener('click', copyResult);
+    restore();
+    updateCount();
+    if (phase === 'editing') renderPreview();
+  })();
+  </script>
+</body>
+</html>
