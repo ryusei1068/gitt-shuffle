@@ -146,7 +146,7 @@
         <aside class="panel">
           <section id="setup-panel" aria-labelledby="setup-title">
             <div class="panel-heading"><h2 id="setup-title">プレゼントの登録</h2><span class="count" id="people-count">0人</span></div>
-            <p class="help" id="entry-help">参加者の名前を入力します。<br>箱番号と持ち主の対応は、開始時にアプリが決めます。</p>
+            <p class="help" id="entry-help">参加者の名前を入力します。<br>箱は各自の番ごとに混ぜ直し、1番から番号を振ります。</p>
             <div class="entry-head" aria-hidden="true"><span>名前</span><span></span></div>
             <div class="entry-list" id="entry-list"></div>
             <div class="entry-actions"><button class="secondary" id="add-person" type="button">＋ 参加者を追加</button><button class="text-button" id="sample" type="button">お試し入力</button></div>
@@ -209,7 +209,9 @@
       return order;
     }
     function createGame(people, turnMode = 'winner') {
-      return { version: 1, people: people.map(person => ({ ...person })), boxOwners: shuffled(people.length), turnOrder: turnMode==='winner'?people.map(person=>person.id):shuffled(people.length), turnMode, activePerson: null, picks: [], pending: false, revealed: false };
+      const game = { version: 1, people: people.map(person => ({ ...person })), boxOwners: shuffled(people.length), turnOrder: turnMode==='winner'?people.map(person=>person.id):shuffled(people.length), turnMode, activePerson: null, picks: [], pending: false, revealed: false, offer: null };
+      if (turnMode==='random') prepareOffer(game);
+      return game;
     }
     function setCurrentPlayer(game, person) {
       if (game.turnMode!=='winner' || game.pending || game.revealed || !Number.isInteger(person)) return false;
@@ -218,6 +220,7 @@
       if (position < 0) return false;
       [game.turnOrder[current],game.turnOrder[position]] = [game.turnOrder[position],game.turnOrder[current]];
       game.activePerson = person;
+      prepareOffer(game);
       return true;
     }
     function remainingBoxes(game) {
@@ -245,11 +248,42 @@
       const boxes = remainingBoxes(game);
       return boxes.filter(item => item.owner !== person && canFinish(later, boxes.filter(other => other.box !== item.box))).map(item => item.box);
     }
+    function offerCount(game) {
+      return Math.max(1,game.people.length-game.picks.length-1);
+    }
+    function validOffer(game) {
+      const offer=game.offer;
+      if (!offer || game.pending || game.revealed || game.picks.length>=game.people.length) return false;
+      if (offer.person!==game.turnOrder[game.picks.length] || !Array.isArray(offer.boxes) || offer.boxes.length!==offerCount(game) || new Set(offer.boxes).size!==offer.boxes.length) return false;
+      const allowed=new Set(eligibleBoxes(game));
+      return offer.boxes.every(box=>Number.isInteger(box)&&allowed.has(box));
+    }
+    function prepareOffer(game) {
+      if (validOffer(game)) return game.offer;
+      const allowed=eligibleBoxes(game);
+      if (!allowed.length) {game.offer=null;return null;}
+      const count=offerCount(game);
+      // Keep the public count independent of whether the player's own gift remains.
+      if (allowed.length<count) throw new Error('Not enough eligible gifts');
+      game.offer={person:game.turnOrder[game.picks.length],boxes:shuffled(allowed.length).slice(0,count).map(index=>allowed[index])};
+      return game.offer;
+    }
+    function offeredChoices(game) {
+      return validOffer(game)?Array.from({length:game.offer.boxes.length},(_,index)=>index+1):[];
+    }
     function chooseBox(game, box) {
       if (!Number.isInteger(box) || !eligibleBoxes(game).includes(box)) return false;
       game.picks.push({ person: game.turnOrder[game.picks.length], box });
       game.pending = true;
       game.activePerson = null;
+      game.offer = null;
+      return true;
+    }
+    function chooseOffer(game, choice) {
+      if (!Number.isInteger(choice) || !validOffer(game) || choice<1 || choice>game.offer.boxes.length) return false;
+      const box=game.offer.boxes[choice-1];
+      if (!chooseBox(game,box)) return false;
+      game.picks[game.picks.length-1].choice=choice;
       return true;
     }
     function canViewResults(game) {
@@ -259,6 +293,7 @@
       if (game.revealed || game.picks.length!==game.people.length) return false;
       game.pending = false;
       game.activePerson = null;
+      game.offer = null;
       game.revealed = true;
       return true;
     }
@@ -277,23 +312,24 @@
       for (let i = 0; i < game.picks.length; i++) {
         const pick = game.picks[i];
         if (!pick || pick.person !== game.turnOrder[i] || !Number.isInteger(pick.box) || pick.box < 1 || pick.box > n || used.has(pick.box) || game.boxOwners[pick.box - 1] === pick.person) return false;
+        if (pick.choice!==undefined && (!Number.isInteger(pick.choice) || pick.choice<1 || pick.choice>Math.max(1,n-i-1))) return false;
         used.add(pick.box);
       }
-      return canFinish(game.turnOrder.slice(game.picks.length), remainingBoxes(game));
+      return canFinish(game.turnOrder.slice(game.picks.length), remainingBoxes(game)) && (game.offer==null || validOffer(game));
     }
     function restoreGame(saved) {
       if (!validGame(saved)) return null;
-      const restored = { ...saved, turnMode: saved.turnMode??'random', activePerson: saved.activePerson??null,
+      const restored = { ...saved, turnMode: saved.turnMode??'random', activePerson: saved.activePerson??null, offer: saved.offer??null,
         revealed: saved.revealed??(saved.picks.length===saved.people.length && !saved.pending) };
       return validGame(restored)?restored:null;
     }
     function gameTransfers(game) {
       if (!canViewResults(game)) return [];
-      return game.picks.map(pick => ({ giver: game.people[game.boxOwners[pick.box-1]], receiver: game.people[pick.person], box: pick.box }));
+      return game.picks.map(pick => ({ giver: game.people[game.boxOwners[pick.box-1]], receiver: game.people[pick.person], choice: pick.choice??null }));
     }
     function transferText(game) {
       if (!canViewResults(game)) return 'プレゼントの持ち主は、全員が選び終わってから発表します。';
-      return 'プレゼント交換の結果\n渡す人 → 受け取る人\n\n' + gameTransfers(game).map(transfer => `${transfer.giver.name}さん → ${transfer.receiver.name}さん（箱 ${transfer.box}）`).join('\n');
+      return 'プレゼント交換の結果\n渡す人 → 受け取る人\n\n' + gameTransfers(game).map(transfer => `${transfer.giver.name}さん → ${transfer.receiver.name}さん`).join('\n');
     }
     // Browser interface.
     const $ = id => document.getElementById(id);
@@ -385,11 +421,11 @@
       $('history').setAttribute('aria-label',visible?'プレゼントの受け渡し結果':'選択した箱の記録');
       if (visible) {
         gameTransfers(game).forEach(transfer=>{
-          const item = el('li'); item.append(el('span','history-title',`${transfer.giver.name}さん → ${transfer.receiver.name}さん`),el('span','history-detail',`箱 ${transfer.box}`)); $('history').appendChild(item);
+          const item = el('li'); item.append(el('span','history-title',`${transfer.giver.name}さん → ${transfer.receiver.name}さん`)); $('history').appendChild(item);
         });
       } else {
         game.picks.forEach(pick=>{
-          const item=el('li');item.append(el('span','history-title',`${game.people[pick.person].name}さん`),el('span','history-detail',`箱 ${pick.box} を選択済み`));$('history').appendChild(item);
+          const item=el('li');item.append(el('span','history-title',`${game.people[pick.person].name}さん`),el('span','history-detail',pick.choice?`その番の箱 ${pick.choice} を選択済み`:'箱を選択済み'));$('history').appendChild(item);
         });
       }
       $('copy-results').hidden = !visible; $('copy-results').disabled = !visible; $('edit-setup').disabled = phase === 'opening';
@@ -418,10 +454,11 @@
         const wait=el('div','empty');wait.append(gift(0),el('p','','勝った人を選ぶと、箱が並びます。'));body.appendChild(wait);
         updateProgress();announce('ゲームに勝った人の名前を選んでください。');return;
       }
-      const available = eligibleBoxes(game);
-      const banner = el('div','turn-banner'); banner.append(el('p','turn-caption','次に選ぶのは'),el('p','turn-name',`${person.name}さん`),el('p','turn-hint','持ち主は最後に発表します。'));
+      const previous=game.offer;prepareOffer(game);if(game.offer!==previous)save();
+      const available = offeredChoices(game);
+      const banner = el('div','turn-banner'); banner.append(el('p','turn-caption','次に選ぶのは'),el('p','turn-name',`${person.name}さん`),el('p','turn-hint','箱番号は、その人の番ごとに振り直します。'),el('p','turn-hint','持ち主は最後に発表します。'));
       const board = el('div','box-grid');
-      // Box artwork depends on the public box number, never the hidden owner.
+      // Only per-turn numbers and colors enter the page, never persistent gift IDs.
       for (const box of available) {
         const button = el('button','box-button'); button.type = 'button'; button.dataset.box = String(box);
         button.setAttribute('aria-label',`箱 ${box}を選ぶ`);
@@ -435,7 +472,8 @@
       phase = 'confirmation'; $('stage').setAttribute('aria-busy','false');
       const pick = game.picks[game.picks.length-1]; const person = game.people[pick.person];
       $('stage-title').textContent = '箱の選択が完了しました'; $('stage-state').textContent = `${game.picks.length} / ${game.people.length}`;
-      const area = el('div','reveal'+(withEffects?' is-new':'')); area.append(el('p','reveal-box','CHOICE COMPLETE'),gift(pick.box-1),el('p','reveal-receiver',`${person.name}さんの選択`),el('p','reveal-owner',`箱 ${String(pick.box).padStart(2,'0')}`),el('p','reveal-word','この箱を確保しました！'));
+      const chosen=pick.choice?`箱 ${String(pick.choice).padStart(2,'0')}`:'選んだ箱';
+      const area = el('div','reveal'+(withEffects?' is-new':'')); area.append(el('p','reveal-box','CHOICE COMPLETE'),gift((pick.choice??1)-1),el('p','reveal-receiver',`${person.name}さんの選択`),el('p','reveal-owner',chosen),el('p','reveal-word','この箱を確保しました！'));
       area.appendChild(el('p','help','誰からのプレゼントかは、全員が選んだあとに発表します。'));
       const last=game.picks.length===game.people.length;
       const next = el('button','primary',last?'全員の結果を発表！':'次の人へ'); next.type = 'button'; next.id = 'next-person';
@@ -446,7 +484,7 @@
         save(); renderGame(); scrollToStage();
       });
       area.appendChild(next); $('stage-body').replaceChildren(area); updateProgress();
-      announce(`${person.name}さんは、箱 ${pick.box} を選びました。\n持ち主は最後に発表します。`);
+      announce(`${person.name}さんは、${chosen}を確保しました。\n持ち主は最後に発表します。`);
       if (withEffects) {tone(523.25,0,.12);tone(659.25,.12,.16);}
     }
     function transferRow(transfer) {
@@ -477,7 +515,7 @@
     }
     function renderGame() { if (canViewResults(game)) renderSummary(); else if (game.pending || game.picks.length===game.people.length) renderSelection(); else renderTurn(); }
     function openBox(box,button) {
-      if (phase!=='choosing' || !chooseBox(game,box)) return;
+      if (phase!=='choosing' || !chooseOffer(game,box)) return;
       const version = ++runVersion; phase='opening'; clearEffects(); save();
       // Save the box choice now; reveal its owner only in the final results.
       document.querySelectorAll('.box-button').forEach(node=>node.disabled=true); $('copy-results').disabled=true; $('edit-setup').disabled=true;
